@@ -553,11 +553,19 @@ let viewIdx = null;
 
 async function apiFetch(action, body = {}) {
   if (action === 'getAll') {
+    // GETでデータ取得
     const res = await fetch(`${API_URL}?action=getAll`, { redirect: 'follow' });
     return res.json();
   } else {
-    const params = new URLSearchParams({ action, data: JSON.stringify(body) });
-    const res = await fetch(`${API_URL}?${params}`, { redirect: 'follow' });
+    // POSTでデータ保存（フォーム形式でCORS回避）
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('data', JSON.stringify(body));
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: formData,
+      redirect: 'follow'
+    });
     return res.json();
   }
 }
