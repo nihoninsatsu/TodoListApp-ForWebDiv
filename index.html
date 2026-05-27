@@ -435,9 +435,14 @@
       <button onclick="changeYear(1)" title="次の年">&#8250;</button>
     </div>
   </div>
-  <div class="sync-status">
-    <div class="sync-dot" id="syncDot"></div>
-    <span id="syncLabel">読み込み中...</span>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="btn" id="copyYearBtn" onclick="openCopyConfirm()" style="font-size:12px;padding:5px 12px;display:flex;align-items:center;gap:5px">
+      📋 <span id="copyYearLabel">来年にコピー</span>
+    </button>
+    <div class="sync-status">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncLabel">読み込み中...</span>
+    </div>
   </div>
 </div>
 
@@ -509,6 +514,24 @@
     <div class="modal-actions">
       <button class="btn" onclick="closeEdit()">キャンセル</button>
       <button class="btn btn-primary" onclick="saveEdit()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- コピー確認モーダル -->
+<div class="overlay" id="copyOverlay">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head">
+      <span class="modal-heading">📋 年をまるごとコピー</span>
+      <button class="close-btn" onclick="closeCopyConfirm()">✕</button>
+    </div>
+    <p id="copyConfirmText" style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:1rem"></p>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--text2);margin-bottom:1rem">
+      ⚠️ コピー先の年にすでにタスクがある月は上書きされます。<br>完了済みのタスクは「未完了」に戻してコピーします。
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeCopyConfirm()">キャンセル</button>
+      <button class="btn btn-primary" onclick="execCopyYear()">コピーする</button>
     </div>
   </div>
 </div>
@@ -626,6 +649,7 @@ function render() {
 function changeYear(d) {
   year += d;
   document.getElementById('yearLabel').textContent = year;
+  updateCopyBtn();
   render();
 }
 
@@ -723,6 +747,56 @@ async function saveEdit() {
   await pushSave();
 }
 
+// ---- Copy Year ----
+
+function updateCopyBtn() {
+  document.getElementById('copyYearLabel').textContent = `${year+1}年にコピー`;
+}
+
+function openCopyConfirm() {
+  const srcYear = year;
+  const destYear = year + 1;
+  const srcKeys = Array.from({length:12},(_,m)=>key(srcYear,m));
+  const hasSrc = srcKeys.some(k => (todos[k]||[]).length > 0);
+  if (!hasSrc) {
+    alert(`${srcYear}年にはタスクがありません。`);
+    return;
+  }
+  document.getElementById('copyConfirmText').textContent =
+    `${srcYear}年の全タスクを ${destYear}年にコピーします。タイトルと詳細はそのまま引き継がれます。`;
+  document.getElementById('copyOverlay').classList.add('open');
+}
+
+function closeCopyConfirm() {
+  document.getElementById('copyOverlay').classList.remove('open');
+}
+
+async function execCopyYear() {
+  const srcYear = year;
+  const destYear = year + 1;
+  for (let m = 0; m < 12; m++) {
+    const srcKey = key(srcYear, m);
+    const destKey = key(destYear, m);
+    const srcItems = todos[srcKey] || [];
+    if (srcItems.length > 0) {
+      // 完了フラグをリセット、createdAtを更新してコピー
+      todos[destKey] = srcItems.map(t => ({
+        title: t.title,
+        detail: t.detail || '',
+        done: false,
+        createdAt: Date.now()
+      }));
+    }
+  }
+  closeCopyConfirm();
+  // コピー先の年に移動
+  year = destYear;
+  document.getElementById('yearLabel').textContent = year;
+  updateCopyBtn();
+  render();
+  await pushSave();
+}
+
 // ---- Drag & Drop ----
 
 let dragSrcKey = null;
@@ -784,14 +858,18 @@ document.getElementById('detailOverlay').addEventListener('click', e => {
 document.getElementById('editOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('editOverlay')) closeEdit();
 });
+document.getElementById('copyOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('copyOverlay')) closeCopyConfirm();
+});
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeDetail(); closeEdit(); }
+  if (e.key === 'Escape') { closeAdd(); closeDetail(); closeEdit(); closeCopyConfirm(); }
   if (e.key === 'Enter' && document.getElementById('addOverlay').classList.contains('open')) {
     if (document.activeElement.tagName !== 'TEXTAREA') saveTodo();
   }
 });
 
 // ---- Init ----
+updateCopyBtn();
 loadAll();
 </script>
 </body>
