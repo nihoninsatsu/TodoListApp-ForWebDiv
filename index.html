@@ -213,6 +213,26 @@
 
   .todo-label.done { text-decoration: line-through; color: var(--text3); }
 
+  .drag-handle {
+    color: var(--text3);
+    font-size: 14px;
+    cursor: grab;
+    padding: 0 2px;
+    flex-shrink: 0;
+    user-select: none;
+    line-height: 1;
+  }
+
+  .drag-handle:active { cursor: grabbing; }
+
+  .todo-row.dragging {
+    opacity: 0.4;
+  }
+
+  .todo-row.drag-over {
+    border-top: 2px solid var(--accent);
+  }
+
   .has-detail {
     width: 4px;
     height: 4px;
@@ -465,7 +485,30 @@
     <div class="detail-footer">
       <button class="btn btn-danger" onclick="deleteTodo()">🗑 削除</button>
       <div class="spacer"></div>
+      <button class="btn" onclick="openEdit()">✏️ 編集</button>
       <button class="btn" onclick="toggleDone()" id="toggleBtn">✓ 完了にする</button>
+    </div>
+  </div>
+</div>
+
+<!-- 編集モーダル -->
+<div class="overlay" id="editOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-heading">タスクを編集</span>
+      <button class="close-btn" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>タイトル <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="editTitle" placeholder="タスクのタイトルを入力...">
+    </div>
+    <div class="form-group">
+      <label>詳細（任意）</label>
+      <textarea id="editDetail" placeholder="手順、メモ、リンクなど..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeEdit()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEdit()">保存する</button>
     </div>
   </div>
 </div>
@@ -552,7 +595,8 @@ function render() {
       rows = '<div class="empty-hint">タスクなし</div>';
     } else {
       items.forEach((t, i) => {
-        rows += `<div class="todo-row" onclick="openDetail('${k}',${i})">
+        rows += `<div class="todo-row" draggable="true" data-key="${k}" data-idx="${i}" onclick="openDetail('${k}',${i})">
+          <div class="drag-handle" title="ドラッグして並び替え">⠿</div>
           <div class="check-box ${t.done ? 'done' : ''}"></div>
           <span class="todo-label ${t.done ? 'done' : ''}">${esc(t.title)}</span>
           ${t.detail ? '<div class="has-detail" title="詳細あり"></div>' : ''}
@@ -574,6 +618,7 @@ function render() {
   }
   html += '</div>';
   wrap.innerHTML = html;
+  initDrag();
 }
 
 // ---- Year ----
@@ -649,6 +694,85 @@ async function toggleDone() {
   await pushSave();
 }
 
+// ---- Edit Modal ----
+
+function openEdit() {
+  if (viewKey === null) return;
+  const t = todos[viewKey][viewIdx];
+  document.getElementById('editTitle').value = t.title;
+  document.getElementById('editDetail').value = t.detail || '';
+  document.getElementById('editOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('editTitle').focus(), 50);
+}
+
+function closeEdit() {
+  document.getElementById('editOverlay').classList.remove('open');
+}
+
+async function saveEdit() {
+  const title = document.getElementById('editTitle').value.trim();
+  if (!title) { document.getElementById('editTitle').focus(); return; }
+  const detail = document.getElementById('editDetail').value.trim();
+  todos[viewKey][viewIdx].title = title;
+  todos[viewKey][viewIdx].detail = detail;
+  closeEdit();
+  // 詳細モーダルも更新
+  document.getElementById('detailTitle').textContent = title;
+  document.getElementById('detailDesc').textContent = detail || '（詳細なし）';
+  render();
+  await pushSave();
+}
+
+// ---- Drag & Drop ----
+
+let dragSrcKey = null;
+let dragSrcIdx = null;
+
+function initDrag() {
+  document.querySelectorAll('.todo-row[draggable]').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragSrcKey = row.dataset.key;
+      dragSrcIdx = parseInt(row.dataset.idx);
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      document.querySelectorAll('.todo-row').forEach(r => r.classList.remove('drag-over'));
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      document.querySelectorAll('.todo-row').forEach(r => r.classList.remove('drag-over'));
+      row.classList.add('drag-over');
+      e.dataTransfer.dropEffect = 'move';
+    });
+    row.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      row.classList.remove('drag-over');
+      const destKey = row.dataset.key;
+      const destIdx = parseInt(row.dataset.idx);
+      if (dragSrcKey !== destKey || dragSrcIdx === destIdx) return;
+      const items = todos[dragSrcKey];
+      const [moved] = items.splice(dragSrcIdx, 1);
+      items.splice(destIdx, 0, moved);
+      render();
+      await pushSave();
+    });
+    // ドラッグハンドル以外ではドラッグしない
+    row.addEventListener('mousedown', e => {
+      if (!e.target.classList.contains('drag-handle')) {
+        row.setAttribute('draggable', 'false');
+      } else {
+        row.setAttribute('draggable', 'true');
+      }
+    });
+    row.addEventListener('mouseup', () => {
+      row.setAttribute('draggable', 'true');
+    });
+  });
+}
+
 // ---- Events ----
 
 document.getElementById('addOverlay').addEventListener('click', e => {
@@ -657,8 +781,11 @@ document.getElementById('addOverlay').addEventListener('click', e => {
 document.getElementById('detailOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('detailOverlay')) closeDetail();
 });
+document.getElementById('editOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('editOverlay')) closeEdit();
+});
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeAdd(); closeDetail(); }
+  if (e.key === 'Escape') { closeAdd(); closeDetail(); closeEdit(); }
   if (e.key === 'Enter' && document.getElementById('addOverlay').classList.contains('open')) {
     if (document.activeElement.tagName !== 'TEXTAREA') saveTodo();
   }
