@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>チーム月別Todoカレンダー</title>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0ede8;
+    --border: #e0dbd4;
+    --border2: #ccc7bf;
+    --text: #1a1816;
+    --text2: #6b6560;
+    --text3: #a09b96;
+    --accent: #1D9E75;
+    --accent-light: #e1f5ee;
+    --danger: #c0392b;
+    --danger-light: #fdf0ef;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+
+  .app-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app-title svg { color: var(--accent); }
+
+  .year-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface2);
+    border-radius: 20px;
+    padding: 4px 6px;
+  }
+
+  .year-nav button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text2);
+    font-size: 14px;
+  }
+
+  .year-nav button:hover { background: var(--border); }
+
+  .year-nav .year-text {
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 48px;
+    text-align: center;
+  }
+
+  .sync-status {
+    font-size: 11px;
+    color: var(--text3);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .sync-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .sync-dot.syncing {
+    background: #f0a500;
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .main { padding: 1.5rem 2rem 3rem; max-width: 1200px; margin: 0 auto; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+
+  .month-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: box-shadow 0.15s, border-color 0.15s;
+  }
+
+  .month-card:hover { border-color: var(--border2); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+  .month-head {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .month-name-wrap { display: flex; align-items: baseline; gap: 6px; }
+
+  .month-name { font-size: 14px; font-weight: 600; }
+
+  .month-progress {
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  .progress-bar-wrap {
+    width: 48px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  .month-body { padding: 6px 0; min-height: 52px; }
+
+  .todo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s;
+  }
+
+  .todo-row:hover { background: var(--surface2); }
+
+  .check-box {
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
+    border: 1.5px solid var(--border2);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+  }
+
+  .check-box.done {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .check-box.done::after {
+    content: '';
+    width: 8px;
+    height: 5px;
+    border-left: 2px solid white;
+    border-bottom: 2px solid white;
+    transform: rotate(-45deg) translate(1px, -1px);
+    display: block;
+  }
+
+  .todo-label {
+    font-size: 13px;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+  }
+
+  .todo-label.done { text-decoration: line-through; color: var(--text3); }
+
+  .has-detail {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--text3);
+    flex-shrink: 0;
+  }
+
+  .add-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    padding: 5px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text3);
+    font-family: inherit;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    transition: color 0.1s, background 0.1s;
+  }
+
+  .add-btn:hover { color: var(--text2); background: var(--surface2); }
+
+  .empty-hint { padding: 8px 14px; font-size: 12px; color: var(--text3); }
+
+  /* モーダル共通 */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.25);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    width: 420px;
+    max-width: 100%;
+    padding: 1.25rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  }
+
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .modal-heading { font-size: 14px; font-weight: 600; }
+
+  .close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px;
+  }
+
+  .close-btn:hover { color: var(--text); }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+
+  input[type="text"], textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+
+  textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+  .form-group { margin-bottom: 12px; }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 1rem;
+  }
+
+  .btn {
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    border: 1px solid var(--border2);
+    background: none;
+    color: var(--text);
+    transition: background 0.1s;
+  }
+
+  .btn:hover { background: var(--surface2); }
+
+  .btn-primary {
+    background: var(--text);
+    color: var(--surface);
+    border-color: var(--text);
+  }
+
+  .btn-primary:hover { opacity: 0.8; }
+
+  .btn-danger { color: var(--danger); border-color: #e8b4b0; }
+  .btn-danger:hover { background: var(--danger-light); }
+
+  /* 詳細モーダル */
+  .detail-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+
+  .detail-meta { font-size: 11px; color: var(--text3); margin-bottom: 10px; }
+
+  .detail-desc {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    min-height: 60px;
+  }
+
+  .detail-footer {
+    display: flex;
+    gap: 8px;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    align-items: center;
+  }
+
+  .spacer { flex: 1; }
+
+  /* ローディング */
+  .loading {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text3);
+    font-size: 13px;
+  }
+
+  /* エラーバナー */
+  .error-banner {
+    display: none;
+    background: var(--danger-light);
+    border: 1px solid #e8b4b0;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--danger);
+    margin-bottom: 1rem;
+  }
+
+  .error-banner.show { display: block; }
+
+  @media (max-width: 600px) {
+    .topbar { padding: 0 1rem; }
+    .main { padding: 1rem 1rem 3rem; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="app-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      チーム月別 Todo
+    </div>
+    <div class="year-nav">
+      <button onclick="changeYear(-1)" title="前の年">&#8249;</button>
+      <span class="year-text" id="yearLabel">2026</span>
+      <button onclick="changeYear(1)" title="次の年">&#8250;</button>
+    </div>
+  </div>
+  <div class="sync-status">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncLabel">読み込み中...</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="error-banner" id="errorBanner">
+    ⚠️ データの読み込みに失敗しました。<code>API_URL</code> の設定を確認してください。
+  </div>
+  <div id="gridWrap">
+    <div class="loading">データを読み込んでいます...</div>
+  </div>
+</div>
+
+<!-- 追加モーダル -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-heading" id="addModalTitle">タスクを追加</span>
+      <button class="close-btn" onclick="closeAdd()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>タイトル <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="inputTitle" placeholder="タスクのタイトルを入力...">
+    </div>
+    <div class="form-group">
+      <label>詳細（任意）</label>
+      <textarea id="inputDetail" placeholder="手順、メモ、リンクなど..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAdd()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveTodo()">追加する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 詳細モーダル -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-heading" id="detailMonthLabel"></span>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-title" id="detailTitle"></div>
+    <div class="detail-meta" id="detailMeta"></div>
+    <div class="detail-desc" id="detailDesc"></div>
+    <div class="detail-footer">
+      <button class="btn btn-danger" onclick="deleteTodo()">🗑 削除</button>
+      <div class="spacer"></div>
+      <button class="btn" onclick="toggleDone()" id="toggleBtn">✓ 完了にする</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ★ ここを自分のURLに書き換えてください ★
+const API_URL = 'https://script.google.com/macros/s/AKfycbxzcGlw7RBR7zYDMUEuYBb5DbVDdP3SEHH2uN0b_olJ15pkMf6-_UiujdRd9T40uPCg/exec';
+// ============================================================
+
+const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+let year = 2026;
+let todos = {};
+let addKey = null;
+let viewKey = null;
+let viewIdx = null;
+
+// ---- API ----
+
+async function apiFetch(action, body = {}) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, ...body }),
+    redirect: 'follow'
+  });
+  return res.json();
+}
+
+async function loadAll() {
+  setSyncState('syncing', '読み込み中...');
+  try {
+    const data = await apiFetch('getAll');
+    if (data.error) throw new Error(data.error);
+    todos = data.todos || {};
+    setSyncState('ok', '同期済み');
+    document.getElementById('errorBanner').classList.remove('show');
+  } catch (e) {
+    setSyncState('err', 'エラー');
+    document.getElementById('errorBanner').classList.add('show');
+  }
+  render();
+}
+
+async function pushSave() {
+  setSyncState('syncing', '保存中...');
+  try {
+    await apiFetch('save', { todos });
+    setSyncState('ok', '保存済み ✓');
+    setTimeout(() => setSyncState('ok', '同期済み'), 2000);
+  } catch (e) {
+    setSyncState('err', '保存失敗');
+  }
+}
+
+function setSyncState(state, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot' + (state === 'syncing' ? ' syncing' : '');
+  dot.style.background = state === 'err' ? '#c0392b' : state === 'syncing' ? '#f0a500' : '#1D9E75';
+  lbl.textContent = label;
+}
+
+// ---- Render ----
+
+function key(y, m) { return `${y}-${String(m+1).padStart(2,'0')}`; }
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function render() {
+  const wrap = document.getElementById('gridWrap');
+  let html = '<div class="grid">';
+  for (let m = 0; m < 12; m++) {
+    const k = key(year, m);
+    const items = todos[k] || [];
+    const done = items.filter(t => t.done).length;
+    const pct = items.length ? Math.round(done / items.length * 100) : 0;
+
+    let rows = '';
+    if (items.length === 0) {
+      rows = '<div class="empty-hint">タスクなし</div>';
+    } else {
+      items.forEach((t, i) => {
+        rows += `<div class="todo-row" onclick="openDetail('${k}',${i})">
+          <div class="check-box ${t.done ? 'done' : ''}"></div>
+          <span class="todo-label ${t.done ? 'done' : ''}">${esc(t.title)}</span>
+          ${t.detail ? '<div class="has-detail" title="詳細あり"></div>' : ''}
+        </div>`;
+      });
+    }
+
+    html += `<div class="month-card">
+      <div class="month-head">
+        <div class="month-name-wrap">
+          <span class="month-name">${MONTHS[m]}</span>
+          ${items.length > 0 ? `<span class="month-progress">${done}/${items.length}</span>` : ''}
+        </div>
+        ${items.length > 0 ? `<div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>` : ''}
+      </div>
+      <div class="month-body">${rows}</div>
+      <button class="add-btn" onclick="openAdd('${k}',${m})">＋ タスクを追加</button>
+    </div>`;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+// ---- Year ----
+
+function changeYear(d) {
+  year += d;
+  document.getElementById('yearLabel').textContent = year;
+  render();
+}
+
+// ---- Add Modal ----
+
+function openAdd(k, m) {
+  addKey = k;
+  document.getElementById('addModalTitle').textContent = `${year}年${MONTHS[m]} ─ タスクを追加`;
+  document.getElementById('inputTitle').value = '';
+  document.getElementById('inputDetail').value = '';
+  document.getElementById('addOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('inputTitle').focus(), 50);
+}
+
+function closeAdd() {
+  document.getElementById('addOverlay').classList.remove('open');
+  addKey = null;
+}
+
+async function saveTodo() {
+  const title = document.getElementById('inputTitle').value.trim();
+  if (!title) { document.getElementById('inputTitle').focus(); return; }
+  const detail = document.getElementById('inputDetail').value.trim();
+  if (!todos[addKey]) todos[addKey] = [];
+  todos[addKey].push({ title, detail, done: false, createdAt: Date.now() });
+  closeAdd();
+  render();
+  await pushSave();
+}
+
+// ---- Detail Modal ----
+
+function openDetail(k, i) {
+  const t = (todos[k] || [])[i];
+  if (!t) return;
+  viewKey = k; viewIdx = i;
+  const [y, mo] = k.split('-');
+  document.getElementById('detailMonthLabel').textContent = `${y}年${parseInt(mo)}月`;
+  document.getElementById('detailTitle').textContent = t.title;
+  document.getElementById('detailMeta').textContent = t.createdAt
+    ? '登録日: ' + new Date(t.createdAt).toLocaleDateString('ja-JP') : '';
+  document.getElementById('detailDesc').textContent = t.detail || '（詳細なし）';
+  document.getElementById('toggleBtn').textContent = t.done ? '↩ 未完了に戻す' : '✓ 完了にする';
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  viewKey = null; viewIdx = null;
+}
+
+async function deleteTodo() {
+  if (viewKey === null) return;
+  todos[viewKey].splice(viewIdx, 1);
+  closeDetail();
+  render();
+  await pushSave();
+}
+
+async function toggleDone() {
+  if (viewKey === null) return;
+  todos[viewKey][viewIdx].done = !todos[viewKey][viewIdx].done;
+  const isDone = todos[viewKey][viewIdx].done;
+  document.getElementById('toggleBtn').textContent = isDone ? '↩ 未完了に戻す' : '✓ 完了にする';
+  render();
+  await pushSave();
+}
+
+// ---- Events ----
+
+document.getElementById('addOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('addOverlay')) closeAdd();
+});
+document.getElementById('detailOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('detailOverlay')) closeDetail();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeAdd(); closeDetail(); }
+  if (e.key === 'Enter' && document.getElementById('addOverlay').classList.contains('open')) {
+    if (document.activeElement.tagName !== 'TEXTAREA') saveTodo();
+  }
+});
+
+// ---- Init ----
+loadAll();
+</script>
+</body>
+</html>
